@@ -173,6 +173,24 @@ my $dfirst="";
 if ($res->is_success) {
 	print("Transfer went ok\n");
 	# next token request
+	while ($response_body =~ /name="frmLogin"/) {
+	    $res = $ua->post("https://$dhost:$dport/dana-na/auth/$durl/login.cgi",
+			     [ sn_preauth_proceed  => 'Proceed' ]);
+
+	    if ($res->is_success) {
+		$res = $ua->post("https://$dhost:$dport/dana-na/auth/$durl/login.cgi",
+				 [ btnSubmit   => 'Sign In',
+				   password  => $password,
+				   realm => $realm,
+				   tz   => '60',
+				   username  => $username,
+				 ]);
+	    }
+	    if ( $response_body =~ /Invalid username or password/){
+		print "Invalid user name or password, exiting \n";
+		exit 1;
+	    }
+	}
 	if ($response_body =~ /name="frmDefender"/ || $response_body =~ /name="frmNextToken"/) {
 		$response_body =~ m/name="key" value="([^"]+)"/;
 		my $key=$1;
