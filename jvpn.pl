@@ -553,6 +553,10 @@ if($mode eq "ncsvc") {
 	$socket->recv($data,2048);
 	hdump($data) if $packetdump;
 
+	my $dns1 = inet_ntoa(pack("N",unpack('x[84]N', $data)));
+	my $p = Net::Ping->new("icmp");
+        my $pingfreq = 10;
+
 	if(defined $script && -x $script){
 		print "Running user-defined script\n";
 		$ENV{'EVENT'}="up";
@@ -570,7 +574,25 @@ if($mode eq "ncsvc") {
 		"\nConnected to $dhost, press CTRL+C to exit\n";
 	# disabling cursor
 	print "\e[?25l";
+
+        my $pingcount = 0;
+        my $pingfails = 5;
 	while ( 1 ) {
+		$pingcount ++;
+		if ($pingcount%$pingfreq == 0) {
+                    #if (ping(host => $dns1, timeout => 10)) {
+                    if (!$p->ping($dns1, 10)) {
+                        $pingfails --;
+                        if ($pingfails == 0) {
+			    print "\nDNS1 unresponsive\n";
+			    INT_handler();
+                        } else {
+                            print "\nDNS1 ping failed\n";
+                        }
+                    } else {
+                        $pingfails = 5;
+                    }
+		}
 		#stat query
 		$data="\0\0\0\0\0\0\0\x69\x01\0\0\0\x01\0\0\0\0\0\0\0";
 		hdump($data) if $packetdump;
