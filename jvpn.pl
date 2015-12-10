@@ -50,6 +50,7 @@ my $username=$Config{"username"};
 my $realm=$Config{"realm"};
 my $dnsprotect=$Config{"dnsprotect"};
 my $debug=$Config{"debug"};
+my $packetdump=$Config{"dump"};
 my $verifycert=$Config{"verifycert"};
 my $mode=$Config{"mode"};
 my $script=$Config{"script"};
@@ -128,8 +129,8 @@ else {
 }
 # show LWP traffic dump if debug is enabled
 if($debug){
-    $ua->add_handler("request_send",  sub { shift->dump; return });
-    $ua->add_handler("response_done", sub { shift->dump; return });
+    $ua->add_handler("request_send",  sub { shift->dump(maxlength => 4096); return }, owner => "send");
+    $ua->add_handler("response_done", sub { shift->dump(maxlength => 4096); return }, owner => "done");
 }
 
 if (!defined($username) || $username eq "" || $username eq "interactive") {
@@ -248,7 +249,7 @@ if ($res->is_success) {
 		# sending DSPREAUTH
 		print "Sending data to tncc...         ";
 		my $data =   "start\nIC=$dhost\nCookie=$dspreauth\nDSSIGNIN=null\n";
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 		print $narsocket "$data";
 		$narsocket->recv($data,2048);
 		$narsocket->close();
@@ -256,7 +257,7 @@ if ($res->is_success) {
 			print "\nUnable to get data from tncc, exiting";
 			exit 1;
 		}
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 		my @resp_lines = split /\n/, $data;
 
 		if($resp_lines[0]!=200) {
@@ -276,7 +277,7 @@ if ($res->is_success) {
 		if(length($dspreauth)) {
 			$narsocket = retry_port($narport);
 			$data =   "setcookie\nCookie=$dspreauth\n";
-			hdump($data) if $debug;
+			hdump($data) if $packetdump;
 			print $narsocket "$data";
 			$narsocket->close();
 		}
@@ -314,7 +315,11 @@ if ($res->is_success) {
 		print "Unable to get DSID, exiting \n";
 		exit 1;
 	}
-	
+
+	if ($debug eq "1") {
+	    $ua->remove_handler("request_send", owner => "send");
+	    $ua->remove_handler("response_done", owner => "done");
+	}
 } else {
 	# Error code, type of error, error message
 	print("An error happened: ".$res->status_line."\n");
@@ -407,27 +412,27 @@ if($mode eq "ncsvc") {
 	print "Sending handshake #1 packet... ";
 	$data =   "\0\0\0\0\0\0\0\x64\x01\0\0\0\0\0\0\0\0\0\0\0";
 
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	print $socket "$data";
 	$socket->recv($data,2048);
 	# XXX - good idea to chek if it valid
 	print " [done]\n";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 
 	# second packet from tcpdump
 	# it contains logging level in the end:
 	# 0 LogLevel 0, 10 LogLevel 1, 20 LogLevel 2
 	# 30 LogLevel 3, 40 LogLevel 4, 50 LogLevel 5
-	# We are enabling full log if debug is enabled
+	# We are enabling full log if packetdump is enabled
 	$data= "\0\0\0\0\0\0\0\x7c\x01\0\0\0\x01\0\0\0\0\0\0\x10\0\0\0\0\0\x0a\0\0".
-		"\0\0\0\x04\0\0\0".($debug?"\x32":"\0");
+		"\0\0\0\x04\0\0\0".($packetdump?"\x35":"\0");
 	print "Sending handshake #2 packet... ";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	print $socket "$data";
 	$socket->recv($data,2048);
 	# XXX - good idea to chek if it is valid
 	print " [done]\n";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	my $dsidline="DSSignInURL=/; DSID=$dsid; DSFirstAccess=$dfirst; DSLastAccess=$dlast; path=/; secure";
 	# Configuration packet
 	# XXX - no idea how it works on non default port
@@ -440,11 +445,11 @@ if($mode eq "ncsvc") {
 		$md5hash.
 		"\0";
 	print "Sending configuration packet...";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	print $socket "$data";
 	$socket->recv($data,2048);
 	print " [done]\n";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	# checking reply status
 	my @result = unpack('C*',$data);
 	my $status = sprintf("%02x",$result[7]);
@@ -525,10 +530,10 @@ if ($mode eq "ncui"){
 if($mode eq "ncsvc") {
 	# information query
 	$data =  "\0\0\0\0\0\0\0\x6a\x01\0\0\0\x01\0\0\0\0\0\0\0";
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 	print $socket "$data";
 	$socket->recv($data,2048);
-	hdump($data) if $debug;
+	hdump($data) if $packetdump;
 
 	if(defined $script && -x $script){
 		print "Running user-defined script\n";
@@ -550,14 +555,14 @@ if($mode eq "ncsvc") {
 	while ( 1 ) {
 		#stat query
 		$data="\0\0\0\0\0\0\0\x69\x01\0\0\0\x01\0\0\0\0\0\0\0";
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 		print $socket "$data";
 		$socket->recv($data,2048);
 		if(!length($data) || !$socket->connected()) {
 		    print "\nNo response from ncsvc, closing connection\n";
 		    INT_handler();
 		}
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 		my $now = time - $start_t;
 		# printing RX/TX. This packet also contains encription type,
 		# compression and transport info, but length seems to be variable
@@ -611,12 +616,12 @@ sub INT_handler {
 		print "\nSending disconnect packet\n";
 		# disconnect packet
 		$data="\0\0\0\0\0\0\0\x67\x01\0\0\0\x01\0\0\0\0\0\0\0";
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 		print $socket "$data";
 		$socket->recv($data,2048);
 		print "Got reply\n";
 		# xxx - we are ignoring reply
-		hdump($data) if $debug;
+		hdump($data) if $packetdump;
 	}
 	print "Logging out...\n";
 	# do logout
