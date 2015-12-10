@@ -607,7 +607,7 @@ if($mode eq "ncsvc") {
 		# printing RX/TX. This packet also contains encription type,
 		# compression and transport info, but length seems to be variable
 		print "\r                                                              \r";
-		printf("Duration: %02d:%02d:%02d  Sent: %s\tReceived: %s", 
+		printf("Time: %02d:%02d:%02d TX: %s RX: %s", 
 			int($now / 3600), int(($now % 3600) / 60), int($now % 60),
 			format_bytes(unpack('x[78]N',$data)), format_bytes(unpack('x[68]N',$data)));
 		sleep(1);
