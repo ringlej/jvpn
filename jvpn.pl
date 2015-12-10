@@ -25,6 +25,7 @@ use File::Copy;
 use File::Temp;
 use File::Path;
 use POSIX;
+use Net::Ping;
 
 my %Config;
 my @config_files = ("./jvpn.ini", $ENV{'HOME'}."/.jvpn.ini", "/etc/jvpn/jvpn.ini");
